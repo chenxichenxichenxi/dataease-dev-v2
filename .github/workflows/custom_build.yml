@@ -54,25 +54,10 @@ jobs:
         
     - name: Build with Maven
       run: |
-        # 先安装父POM
-        mvn clean install -N -Dmaven.test.skip=true
-        
-        # 构建core模块
+        mvn clean install
         cd core
         mvn clean package -Pdesktop -U -Dmaven.test.skip=true
-        
-        # 查找backend的JAR文件（确保找的是backend不是frontend）
-        if [ -d "core-backend/target" ]; then
-          JAR_PATH="core/core-backend/target/$(ls core-backend/target | grep -E '\.jar$' | grep -v -E '-(sources|javadoc)\.jar$' | head -n 1)"
-        elif [ -d "backend/target" ]; then
-          JAR_PATH="core/backend/target/$(ls backend/target | grep -E '\.jar$' | grep -v -E '-(sources|javadoc)\.jar$' | head -n 1)"
-        else
-          echo "::error::Could not find backend JAR file"
-          exit 1
-        fi
-        
-        echo "JAR_PATH=${JAR_PATH}" >> $GITHUB_ENV
-        echo "Found JAR at: ${JAR_PATH}"
+        ls -alt core-backend/target
         
     - name: Create Release
       id: create_release
