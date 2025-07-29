@@ -36,32 +36,35 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
         
+    - name: Fix POM version issue
+      run: |
+        # 替换POM中的变量为实际版本号
+        VERSION=$(echo ${{ github.event.inputs.tag }} | sed 's/^v//')
+        sed -i "s/\${dataease.version}/$VERSION/g" pom.xml
+        sed -i "s/\${dataease.version}/$VERSION/g" core/pom.xml
+        
     - name: Build with Maven
       run: |
-        # 先尝试定位实际的构建路径
-        echo "Searching for buildable modules..."
-        find . -name pom.xml -exec dirname {} \;
-        
-        # 修改后的构建命令，先确保能构建父POM
+        # 先构建父POM
         mvn clean install -N -Dmaven.test.skip=true
         
-        # 尝试构建核心模块（根据实际路径调整）
-        if [ -d "backend" ]; then
-          cd backend
-          mvn clean package -Pdesktop -U -Dmaven.test.skip=true
-          JAR_PATH=$(find . -name "*.jar" | head -n 1)
-        elif [ -d "core" ]; then
+        # 检查实际模块结构并构建
+        if [ -f "core/pom.xml" ]; then
           cd core
-          mvn clean package -Pdesktop -U -Dmaven.test.skip=true
-          JAR_PATH=$(find . -name "*.jar" | head -n 1)
+          # 尝试直接构建core模块（不依赖可能缺失的子模块）
+          mvn clean package -Pdesktop -U -Dmaven.test.skip=true -pl !core-backend
+          
+          # 查找生成的JAR文件
+          JAR_PATH=$(find . -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -n 1)
+          if [ -z "$JAR_PATH" ]; then
+            echo "::error::No JAR file found after build"
+            exit 1
+          fi
+          echo "JAR_PATH=core/$JAR_PATH" >> $GITHUB_ENV
         else
-          echo "::error::Could not find buildable module directory"
+          echo "::error::core/pom.xml not found"
           exit 1
         fi
-        
-        # 保存JAR路径供后续步骤使用
-        echo "JAR_PATH=${JAR_PATH}" >> $GITHUB_ENV
-        echo "Found JAR at: ${JAR_PATH}"
         
     - name: Create Release
       id: create_release
