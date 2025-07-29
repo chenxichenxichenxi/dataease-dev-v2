@@ -36,35 +36,39 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
         
-    - name: Fix POM version issue
+    - name: Fix POM files
       run: |
-        # 替换POM中的变量为实际版本号
+        # 提取纯净版本号（去掉v前缀）
         VERSION=$(echo ${{ github.event.inputs.tag }} | sed 's/^v//')
-        sed -i "s/\${dataease.version}/$VERSION/g" pom.xml
-        sed -i "s/\${dataease.version}/$VERSION/g" core/pom.xml
+        
+        # 修复所有POM文件中的版本变量
+        find . -name pom.xml -exec sed -i "s/\${dataease.version}/$VERSION/g" {} \;
+        
+        # 修复core模块的子模块引用（如果core-backend不存在）
+        if [ ! -d "core/core-backend" ]; then
+          sed -i '/<module>core-backend<\/module>/d' core/pom.xml
+        fi
+        
+        # 打印修改后的POM文件用于调试
+        echo "Modified POM files:"
+        find . -name pom.xml -exec grep -l "<version>$VERSION</version>" {} \;
         
     - name: Build with Maven
       run: |
-        # 先构建父POM
+        # 先安装父POM
         mvn clean install -N -Dmaven.test.skip=true
         
-        # 检查实际模块结构并构建
-        if [ -f "core/pom.xml" ]; then
-          cd core
-          # 尝试直接构建core模块（不依赖可能缺失的子模块）
-          mvn clean package -Pdesktop -U -Dmaven.test.skip=true -pl !core-backend
-          
-          # 查找生成的JAR文件
-          JAR_PATH=$(find . -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -n 1)
-          if [ -z "$JAR_PATH" ]; then
-            echo "::error::No JAR file found after build"
-            exit 1
-          fi
-          echo "JAR_PATH=core/$JAR_PATH" >> $GITHUB_ENV
-        else
-          echo "::error::core/pom.xml not found"
+        # 构建core模块及其子模块（排除不存在的模块）
+        cd core
+        mvn clean package -Pdesktop -U -Dmaven.test.skip=true
+        
+        # 查找生成的JAR文件
+        JAR_PATH=$(find . -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -n 1)
+        if [ -z "$JAR_PATH" ]; then
+          echo "::error::No JAR file found after build"
           exit 1
         fi
+        echo "JAR_PATH=core/$JAR_PATH" >> $GITHUB_ENV
         
     - name: Create Release
       id: create_release
