@@ -1,29 +1,25 @@
-name: Release Builder
+name: Desktop Builder
 
 on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Target Branch"
+        description: 'DataEase Branch'
         required: true
-        default: "master"
+        default: "dev-v2"
       tag:
-        description: "Release Tag (格式: vX.Y.Z)"
+        description: 'tag'
         required: true
-        default: "v1.0.0"
-
-permissions:
-  contents: write  # 必须添加这个权限才能创建release
+        default: "dev-v2"
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
+    - name: checkout dataease repo
       uses: actions/checkout@v4
       with:
         ref: ${{ github.event.inputs.branch }}
-      
     - name: Cache local Maven repository
       uses: actions/cache@v4
       with:
@@ -31,52 +27,15 @@ jobs:
         key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
         restore-keys: |
           ${{ runner.os }}-maven-
-          
     - name: Set up JDK 21
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v1
       with:
         java-version: 21
-        distribution: 'temurin'
-        cache: 'maven'
-        
-    - name: Fix POM files
-      run: |
-        # 提取纯净版本号（去掉v前缀）
-        VERSION=$(echo ${{ github.event.inputs.tag }} | sed 's/^v//')
-        
-        # 修复所有POM文件中的版本变量
-        find . -name pom.xml -exec sed -i "s/\${dataease.version}/$VERSION/g" {} \;
-        
-        # 修复core模块的子模块引用（如果core-backend不存在）
-        if [ ! -d "core/core-backend" ]; then
-          sed -i '/<module>core-backend<\/module>/d' core/pom.xml
-        fi
-        
+        server-id: github
+        settings-path: ${{ github.workspace }}
     - name: Build with Maven
       run: |
         mvn clean install
         cd core
         mvn clean package -Pdesktop -U -Dmaven.test.skip=true
         ls -alt core-backend/target
-        
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.event.inputs.tag }}
-        release_name: Release ${{ github.event.inputs.tag }}
-        draft: false
-        prerelease: false
-        
-    - name: Upload Release Asset
-      if: success() && env.JAR_PATH != ''
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ env.JAR_PATH }}
-        asset_name: CoreApplication-${{ github.event.inputs.tag }}.jar
-        asset_content_type: application/java-archive
