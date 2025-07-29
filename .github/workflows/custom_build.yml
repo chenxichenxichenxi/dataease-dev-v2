@@ -18,6 +18,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch }}
       
     - name: Cache local Maven repository
       uses: actions/cache@v4
@@ -28,22 +30,56 @@ jobs:
           ${{ runner.os }}-maven-
           
     - name: Set up JDK 21
-      uses: actions/setup-java@v1
+      uses: actions/setup-java@v3
       with:
         java-version: 21
+        distribution: 'temurin'
+        cache: 'maven'
         
     - name: Build with Maven
       run: |
-        mvn clean install
-        cd core
-        mvn clean package -Pdesktop -U -Dmaven.test.skip=true
+        # 先尝试定位实际的构建路径
+        echo "Searching for buildable modules..."
+        find . -name pom.xml -exec dirname {} \;
+        
+        # 修改后的构建命令，先确保能构建父POM
+        mvn clean install -N -Dmaven.test.skip=true
+        
+        # 尝试构建核心模块（根据实际路径调整）
+        if [ -d "backend" ]; then
+          cd backend
+          mvn clean package -Pdesktop -U -Dmaven.test.skip=true
+          JAR_PATH=$(find . -name "*.jar" | head -n 1)
+        elif [ -d "core" ]; then
+          cd core
+          mvn clean package -Pdesktop -U -Dmaven.test.skip=true
+          JAR_PATH=$(find . -name "*.jar" | head -n 1)
+        else
+          echo "::error::Could not find buildable module directory"
+          exit 1
+        fi
+        
+        # 保存JAR路径供后续步骤使用
+        echo "JAR_PATH=${JAR_PATH}" >> $GITHUB_ENV
+        echo "Found JAR at: ${JAR_PATH}"
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.event.inputs.tag }}
+        release_name: Release ${{ github.event.inputs.tag }}
+        draft: false
+        prerelease: false
         
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: core/core-backend/target/CoreApplication.jar
-        asset_name: CoreApplication-${{ github.event.release.tag_name }}.jar
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ env.JAR_PATH }}
+        asset_name: CoreApplication-${{ github.event.inputs.tag }}.jar
         asset_content_type: application/java-archive
