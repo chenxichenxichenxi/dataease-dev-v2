@@ -1,8 +1,16 @@
 name: Release Builder
 
 on:
-  release:
-    types: [created]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Target Branch"
+        required: true
+        default: "master"
+      tag:
+        description: "Release Tag (格式: vX.Y.Z)"
+        required: true
+        default: "v1.0.0"
 
 jobs:
   build:
