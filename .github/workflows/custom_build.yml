@@ -1,0 +1,61 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Target Branch"
+        required: true
+        default: "main"
+      tag:
+        description: "Release Tag (格式: vX.Y.Z)"
+        required: true
+        default: "v1.0.0"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 检出代码
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      # 2. 设置缓存（根据项目类型选择）
+      - name: Cache Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository    # Maven
+            # ~/.gradle/caches  # Gradle
+            # node_modules      # Node.js
+          key: ${{ runner.os }}-${{ hashFiles('**/pom.xml') }} # 根据项目文件调整
+
+      # 3. 设置构建环境（示例为 Java）
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      # 4. 构建项目（根据实际命令调整）
+      - name: Build Project
+        run: |
+          mvn clean package -DskipTests  # Maven
+          # ./gradlew build             # Gradle
+          # npm install && npm run build # Node.js
+
+      # 5. 生成 GitHub Release
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: Release ${{ github.event.inputs.tag }}
+          body: "自动化构建版本: ${{ github.event.inputs.tag }}"
+          files: |
+            target/*.jar                # Maven 产物路径
+            # build/libs/*.jar         # Gradle 产物路径
+            # dist/**/*                 # Node.js 产物路径
+          draft: false # 直接发布（非草稿）
+          prerelease: false # 非预发布版本
