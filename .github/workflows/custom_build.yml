@@ -1,4 +1,4 @@
-name: Desktop Builder
+name: Custom Desktop Builder
 
 on:
   workflow_dispatch:
