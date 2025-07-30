@@ -6,7 +6,11 @@ on:
       branch:
         description: 'DataEase Branch'
         required: true
-        default: "master"
+        default: "dev-v2"
+      tag:
+        description: 'tag'
+        required: true
+        default: "dev-v2"
 
 jobs:
   build:
@@ -35,3 +39,12 @@ jobs:
         cd core
         mvn clean package -Pdesktop -U -Dmaven.test.skip=true
         ls -alt core-backend/target
+    - name: setup ossutil
+      uses: yizhoumo/setup-ossutil@v2
+      with:
+        ossutil-version: '1.7.19'
+        endpoint: ${{ secrets.OSS_ENDPOINT }}
+        access-key-id: ${{ secrets.OSS_KEY_ID }}
+        access-key-secret: ${{ secrets.OSS_KEY_SECRET }}
+    - name: upload jar to OSS
+      run: ossutil cp -f core/core-backend/target/CoreApplication.jar oss://${{ secrets.OSS_BUCKET_PATH }}/app-${{ github.event.inputs.tag }}.jar
